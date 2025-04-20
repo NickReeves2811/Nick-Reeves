@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Run From Fries!</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #e0ffe0;
+            font-family: sans-serif;
+        }
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background: #c5e1a5;
+        }
+        #restartBtn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 12px 24px;
+            font-size: 20px;
+            background-color: #388e3c;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+<canvas id="gameCanvas" width="800" height="400"></canvas>
+<button id="restartBtn">Restart Game</button>
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const restartBtn = document.getElementById('restartBtn');
+
+let player, fries, frames, gameOver, speedMultiplier;
+let isDucking = false;
+let frySpawner;
+
+function resetGame() {
+    player = {
+        x: 100,
+        y: 300,
+        width: 40,
+        height: 60,
+        vy: 0,
+        gravity: 1.5,
+        jumpPower: -20,
+        grounded: true,
+        lives: 3,
+        scale: 1,
+        color: '#fdd835'
+    };
+    fries = [];
+    frames = 0;
+    gameOver = false;
+    speedMultiplier = 1;
+    restartBtn.style.display = 'none';
+    clearTimeout(frySpawner);
+    spawnFries();
+    requestAnimationFrame(gameLoop);
+}
+
+function drawPlayer() {
+    let height = player.height * player.scale;
+    let y = player.y;
+    if (isDucking && player.grounded) {
+        height *= 0.5;
+        y += height;
+    }
+    let width = player.width * player.scale;
+
+    ctx.fillStyle = player.color;
+    ctx.fillRect(player.x, y, width, height);
+
+    ctx.fillStyle = '#ffcc80';
+    ctx.beginPath();
+    ctx.arc(player.x + width / 2, y - 10, 15, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = 'black';
+    ctx.beginPath();
+    ctx.arc(player.x + width / 2 - 5, y - 12, 2, 0, Math.PI * 2);
+    ctx.arc(player.x + width / 2 + 5, y - 12, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#fdd835';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(player.x, y + 10);
+    ctx.lineTo(player.x - 10, y + 20);
+    ctx.moveTo(player.x + width, y + 10);
+    ctx.lineTo(player.x + width + 10, y + 20);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(player.x + 10, y + height);
+    ctx.lineTo(player.x + 10, y + height + 10);
+    ctx.moveTo(player.x + width - 10, y + height);
+    ctx.lineTo(player.x + width - 10, y + height + 10);
+    ctx.stroke();
+}
+
+function drawFries(fry) {
+    ctx.fillStyle = 'goldenrod';
+    ctx.fillRect(fry.x - 10, fry.y - 20, 20, 40);
+    ctx.fillStyle = 'red';
+    ctx.fillRect(fry.x - 15, fry.y + 10, 30, 20);
+}
+
+function updatePlayer() {
+    player.vy += player.gravity;
+    player.y += player.vy;
+    if (player.y >= 300) {
+        player.y = 300;
+        player.vy = 0;
+        player.grounded = true;
+    } else {
+        player.grounded = false;
+    }
+}
+
+function spawnFries() {
+    const yPos = Math.random() > 0.5 ? 310 : 330; // Head level and lower
+    const interval = Math.floor(Math.random() * 60) + 60;
+    fries.push({
+        x: canvas.width,
+        y: yPos,
+        radius: 15,
+        speed: 6 * speedMultiplier
+    });
+    frySpawner = setTimeout(spawnFries, interval * 16);
+}
+
+function updateFries() {
+    fries.forEach(fry => fry.x -= fry.speed);
+    fries = fries.filter(fry => fry.x + fry.radius > 0);
+}
+
+function checkCollision() {
+    fries.forEach((fry, index) => {
+        let px = player.x;
+        let py = player.y;
+        let pw = player.width * player.scale;
+        let ph = player.height * player.scale;
+
+        if (isDucking && player.grounded) {
+            ph *= 0.5;
+            py += player.height * player.scale * 0.5;
+        }
+
+        let fryTop = fry.y - 20;
+        let fryBottom = fry.y + 30;
+        let fryLeft = fry.x - 15;
+        let fryRight = fry.x + 15;
+
+        let playerRight = px + pw;
+        let playerBottom = py + ph;
+
+        if (px < fryRight && playerRight > fryLeft && py < fryBottom && playerBottom > fryTop) {
+            fries.splice(index, 1);
+            player.lives--;
+            player.scale += 0.2;
+            if (player.lives <= 0) gameOver = true;
+        }
+    });
+}
+
+function drawLives() {
+    ctx.fillStyle = 'black';
+    ctx.font = '20px Arial';
+    ctx.fillText(`Lives: ${player.lives}`, 10, 30);
+}
+
+function drawGameOver() {
+    ctx.fillStyle = 'red';
+    ctx.font = '50px Arial';
+    ctx.fillText('Game Over', canvas.width / 2 - 150, canvas.height / 2);
+    restartBtn.style.display = 'block';
+}
+
+function gameLoop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (!gameOver) {
+        drawPlayer();
+        updatePlayer();
+
+        updateFries();
+        fries.forEach(drawFries);
+
+        checkCollision();
+        drawLives();
+
+        if (frames % 300 === 0 && speedMultiplier < 3) {
+            speedMultiplier += 0.1;
+        }
+
+        frames++;
+        requestAnimationFrame(gameLoop);
+    } else {
+        drawGameOver();
+    }
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && player.grounded && !gameOver) {
+        player.vy = player.jumpPower;
+        player.grounded = false;
+    }
+    if (e.code === 'ArrowDown') {
+        isDucking = true;
+    }
+});
+
+document.addEventListener('keyup', (e) => {
+    if (e.code === 'ArrowDown') {
+        isDucking = false;
+    }
+});
+
+restartBtn.addEventListener('click', () => {
+    resetGame();
+});
+
+resetGame();
+</script>
+</body>
+</html>
+
